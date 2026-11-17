@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.TransactionMapper">
+
+    <resultMap id="transactionResult" type="com.kaya.entity.Transaction">
+        <id property="id" column="id"/>
+        <result property="referenceNo" column="reference_no"/>
+        <result property="userId" column="user_id"/>
+        <result property="walletId" column="wallet_id"/>
+        <result property="type" column="type"/>
+        <result property="direction" column="direction"/>
+        <result property="status" column="status"/>
+        <result property="amount" column="amount"/>
+        <result property="feeAmount" column="fee_amount"/>
+        <result property="currencyCode" column="currency_code"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="counterpartyUserId" column="counterparty_user_id"/>
+        <result property="recipientId" column="recipient_id"/>
+        <result property="counterpartyName" column="counterparty_name"/>
+        <result property="counterpartyAccountNo" column="counterparty_account_no"/>
+        <result property="relatedTransactionId" column="related_transaction_id"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="note" column="note"/>
+        <result property="occurredAt" column="occurred_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <association property="category" javaType="com.kaya.entity.Category" columnPrefix="cat_">
+            <id property="id" column="id"/>
+            <result property="code" column="code"/>
+            <result property="type" column="type"/>
+            <result property="name" column="name"/>
+            <result property="icon" column="icon"/>
+            <result property="color" column="color"/>
+            <result property="sortOrder" column="sort_order"/>
+        </association>
+    </resultMap>
+
+    <sql id="transactionSelect">
+        SELECT t.id, t.reference_no, t.user_id, t.wallet_id, t.type, t.direction, t.status,
+               t.amount, t.fee_amount, t.currency_code, t.category_id,
+               t.counterparty_user_id, t.recipient_id, t.counterparty_name,
+               t.counterparty_account_no, t.related_transaction_id, t.idempotency_key,
+               t.note, t.occurred_at, t.created_at, t.updated_at,
+               c.id AS cat_id, c.code AS cat_code, c.type AS cat_type, c.name AS cat_name,
+               c.icon AS cat_icon, c.color AS cat_color, c.sort_order AS cat_sort_order
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.category_id
+    </sql>
+
+    <select id="search" resultMap="transactionResult">
+        <include refid="transactionSelect"/>
+        WHERE t.user_id = #{userId}
+        <if test="walletId != null">AND t.wallet_id = #{walletId}</if>
+        <if test="type != null">AND t.type = #{type}</if>
+        <if test="direction != null">AND t.direction = #{direction}</if>
+        <if test="categoryId != null">AND t.category_id = #{categoryId}</if>
+        <if test="from != null">AND t.occurred_at &gt;= #{from}</if>
+        <if test="to != null">AND t.occurred_at &lt; #{to}</if>
+        <if test="keyword != null">
+            AND (t.note LIKE CONCAT('%', #{keyword}, '%')
+                 OR t.counterparty_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY t.occurred_at DESC, t.id DESC
+    </select>
+
+    <select id="findByIdAndUserId" resultMap="transactionResult">
+        <include refid="transactionSelect"/>
+        WHERE t.id = #{id}
+          AND t.user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="findByUserIdAndIdempotencyKey" resultMap="transactionResult">
+        <include refid="transactionSelect"/>
+        WHERE t.user_id = #{userId}
+          AND t.idempotency_key = #{idempotencyKey}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO transactions (
+            reference_no, user_id, wallet_id, type, direction, status, amount, fee_amount,
+            currency_code, category_id, counterparty_user_id, recipient_id,
+            counterparty_name, counterparty_account_no, related_transaction_id,
+            idempotency_key, note, occurred_at
+        )
+        VALUES (
+            #{referenceNo}, #{userId}, #{walletId}, #{type}, #{direction}, #{status},
+            #{amount}, #{feeAmount}, #{currencyCode}, #{categoryId}, #{counterpartyUserId},
+            #{recipientId}, #{counterpartyName}, #{counterpartyAccountNo},
+            #{relatedTransactionId}, #{idempotencyKey}, #{note}, #{occurredAt}
+        )
+    </insert>
+
+    <select id="sumMonthly" resultType="com.kaya.dto.wallet.MonthlyTotals">
+        SELECT
+            COALESCE(SUM(CASE WHEN type IN ('income', 'transfer_in') AND status = 'success' THEN amount ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN type = 'transfer_out' AND status = 'success' THEN amount + COALESCE(fee_amount, 0)
+                              WHEN type = 'expense' AND status = 'success' THEN amount
+                              ELSE 0 END), 0) AS spent
+        FROM transactions
+        WHERE user_id = #{userId}
+          AND occurred_at &gt;= #{start}
+          AND occurred_at &lt; #{end}
+        <if test="walletId != null">AND wallet_id = #{walletId}</if>
+    </select>
+
+    <select id="sumExpenseByCategory" resultType="com.kaya.dto.transaction.CategorySpendRow">
+        SELECT c.id                AS category_id,
+               c.name              AS category_name,
+               c.icon              AS category_icon,
+               c.color             AS category_color,
+               SUM(t.amount)       AS amount,
+               COUNT(*)            AS transaction_count
+        FROM transactions t
+        JOIN categories c ON c.id = t.category_id
+        WHERE t.user_id = #{userId}
+          AND t.type = 'expense'
+          AND t.status = 'success'
+          AND t.occurred_at &gt;= #{start}
+          AND t.occurred_at &lt; #{end}
+        <if test="walletId != null">AND t.wallet_id = #{walletId}</if>
+        GROUP BY c.id, c.name, c.icon, c.color
+        ORDER BY amount DESC, c.id ASC
+    </select>
+
+</mapper>

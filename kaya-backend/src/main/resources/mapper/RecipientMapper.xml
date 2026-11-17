@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.RecipientMapper">
+
+    <sql id="recipientColumns">
+        id, user_id, display_name, phone, email, account_no, bank_name, avatar_url,
+        is_favorite AS favorite, last_used_at, created_at, updated_at, deleted_at
+    </sql>
+
+    <select id="search" resultType="com.kaya.entity.Recipient">
+        SELECT <include refid="recipientColumns"/>
+        FROM recipients
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        <if test="keyword != null">
+            AND (display_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR account_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR phone LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="recent">AND last_used_at IS NOT NULL</if>
+        ORDER BY
+        <choose>
+            <when test="recent">last_used_at DESC, id DESC</when>
+            <otherwise>is_favorite DESC, display_name ASC, id ASC</otherwise>
+        </choose>
+    </select>
+
+    <select id="findByIdAndUserId" resultType="com.kaya.entity.Recipient">
+        SELECT <include refid="recipientColumns"/>
+        FROM recipients
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findByUserIdAndAccountNo" resultType="com.kaya.entity.Recipient">
+        SELECT <include refid="recipientColumns"/>
+        FROM recipients
+        WHERE user_id = #{userId}
+          AND account_no = #{accountNo}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO recipients (
+            user_id, display_name, phone, email, account_no, bank_name,
+            avatar_url, is_favorite
+        )
+        VALUES (
+            #{userId}, #{displayName}, #{phone}, #{email}, #{accountNo}, #{bankName},
+            #{avatarUrl}, #{favorite}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE recipients
+        <set>
+            <if test="displayName != null">display_name = #{displayName},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="accountNo != null">account_no = #{accountNo},</if>
+            <if test="bankName != null">bank_name = #{bankName},</if>
+            <if test="avatarUrl != null">avatar_url = #{avatarUrl},</if>
+            <if test="favorite != null">is_favorite = #{favorite},</if>
+        </set>
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="markDeleted">
+        UPDATE recipients
+        SET deleted_at = #{deletedAt}
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="touchLastUsed">
+        UPDATE recipients
+        SET last_used_at = #{lastUsedAt}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

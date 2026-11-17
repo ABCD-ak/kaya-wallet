@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.UserMapper">
+
+    <sql id="userColumns">
+        id, email, phone, password_hash, payment_password_hash, display_name, username, avatar_url, gender,
+        birthday, email_verified_at, phone_verified_at, status, last_login_at,
+        created_at, updated_at, deleted_at
+    </sql>
+
+    <select id="findByEmail" resultType="com.kaya.entity.User">
+        SELECT <include refid="userColumns"/>
+        FROM users
+        WHERE email = #{email}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findByUsername" resultType="com.kaya.entity.User">
+        SELECT <include refid="userColumns"/>
+        FROM users
+        WHERE username = #{username}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findById" resultType="com.kaya.entity.User">
+        SELECT <include refid="userColumns"/>
+        FROM users
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (email, password_hash, display_name, username)
+        VALUES (#{email}, #{passwordHash}, #{displayName}, #{username})
+    </insert>
+
+    <update id="updateLastLoginAt">
+        UPDATE users
+        SET last_login_at = #{lastLoginAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateProfile">
+        UPDATE users
+        <set>
+            <if test="displayName != null">display_name = #{displayName},</if>
+            <if test="username != null">username = #{username},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="birthday != null">birthday = #{birthday},</if>
+        </set>
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="updatePassword">
+        UPDATE users
+        SET password_hash = #{passwordHash}
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="updatePaymentPassword">
+        UPDATE users
+        SET payment_password_hash = #{paymentPasswordHash}
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="updateAvatarUrl">
+        UPDATE users
+        SET avatar_url = #{avatarUrl}
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+</mapper>

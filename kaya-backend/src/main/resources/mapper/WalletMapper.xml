@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.WalletMapper">
+
+    <sql id="walletColumns">
+        id, user_id, currency_code, balance, status, version, created_at, updated_at
+    </sql>
+
+    <insert id="insertDefault">
+        INSERT INTO wallets (user_id, currency_code, balance)
+        VALUES (#{userId}, #{currencyCode}, 0.00)
+    </insert>
+
+    <select id="findByUserId" resultType="com.kaya.entity.Wallet">
+        SELECT <include refid="walletColumns"/>
+        FROM wallets
+        WHERE user_id = #{userId}
+        ORDER BY id ASC
+    </select>
+
+    <select id="findByIdAndUserId" resultType="com.kaya.entity.Wallet">
+        SELECT <include refid="walletColumns"/>
+        FROM wallets
+        WHERE id = #{id}
+          AND user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="findByIdAndUserIdForUpdate" resultType="com.kaya.entity.Wallet">
+        SELECT <include refid="walletColumns"/>
+        FROM wallets
+        WHERE id = #{id}
+          AND user_id = #{userId}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="sumMonthly" resultType="com.kaya.dto.wallet.MonthlyTotals">
+        SELECT
+            COALESCE(SUM(CASE WHEN type IN ('income', 'transfer_in') AND status = 'success' THEN amount ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN type = 'transfer_out' AND status = 'success' THEN amount + COALESCE(fee_amount, 0)
+                              WHEN type = 'expense' AND status = 'success' THEN amount
+                              ELSE 0 END), 0) AS spent
+        FROM transactions
+        WHERE wallet_id = #{walletId}
+          AND user_id = #{userId}
+          AND occurred_at &gt;= #{start}
+          AND occurred_at &lt; #{end}
+    </select>
+
+    <update id="updateBalance">
+        UPDATE wallets
+        SET balance = #{balance},
+            version = version + 1
+        WHERE id = #{id}
+          AND version = #{expectedVersion}
+    </update>
+
+</mapper>

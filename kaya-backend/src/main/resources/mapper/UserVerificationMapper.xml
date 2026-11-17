@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.UserVerificationMapper">
+
+    <sql id="verificationColumns">
+        id, user_id, type, status, document_type, document_no_last4,
+        verified_at, rejected_reason, created_at, updated_at
+    </sql>
+
+    <select id="findByUserId" resultType="com.kaya.entity.UserVerification">
+        SELECT <include refid="verificationColumns"/>
+        FROM user_verifications
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC, id DESC
+    </select>
+
+    <select id="findByUserAndType" resultType="com.kaya.entity.UserVerification">
+        SELECT <include refid="verificationColumns"/>
+        FROM user_verifications
+        WHERE user_id = #{userId}
+          AND type = #{type}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_verifications (
+            user_id, type, status, document_type, document_no_encrypted,
+            document_no_last4, verified_at, rejected_reason
+        )
+        VALUES (
+            #{userId}, #{type}, #{status}, #{documentType}, #{documentNoEncrypted},
+            #{documentNoLast4}, #{verifiedAt}, #{rejectedReason}
+        )
+    </insert>
+
+</mapper>

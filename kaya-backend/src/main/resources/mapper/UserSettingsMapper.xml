@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.UserSettingsMapper">
+
+    <sql id="settingsColumns">
+        id, user_id, locale, timezone, default_currency_code, push_enabled,
+        email_enabled, sms_enabled, marketing_enabled, created_at, updated_at
+    </sql>
+
+    <insert id="insertDefault">
+        INSERT INTO user_settings (user_id, default_currency_code)
+        VALUES (#{userId}, #{currencyCode})
+    </insert>
+
+    <select id="findByUserId" resultType="com.kaya.entity.UserSettings">
+        SELECT <include refid="settingsColumns"/>
+        FROM user_settings
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <update id="update">
+        UPDATE user_settings
+        <set>
+            <if test="locale != null">locale = #{locale},</if>
+            <if test="timezone != null">timezone = #{timezone},</if>
+            <if test="defaultCurrencyCode != null">default_currency_code = #{defaultCurrencyCode},</if>
+            <if test="pushEnabled != null">push_enabled = #{pushEnabled},</if>
+            <if test="emailEnabled != null">email_enabled = #{emailEnabled},</if>
+            <if test="smsEnabled != null">sms_enabled = #{smsEnabled},</if>
+            <if test="marketingEnabled != null">marketing_enabled = #{marketingEnabled},</if>
+        </set>
+        WHERE user_id = #{userId}
+    </update>
+
+</mapper>

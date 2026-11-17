@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.EmailCodeMapper">
+
+    <insert id="insert" parameterType="com.kaya.entity.EmailCode"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO email_codes (email, code_hash, purpose, expires_at, ip_address)
+        VALUES (#{email}, #{codeHash}, #{purpose}, #{expiresAt}, #{ipAddress})
+    </insert>
+
+    <select id="findLatest" resultType="com.kaya.entity.EmailCode">
+        SELECT id, email, code_hash, purpose, expires_at, used_at, attempts, ip_address, created_at
+        FROM email_codes
+        WHERE email = #{email}
+          AND purpose = #{purpose}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="markUsed">
+        UPDATE email_codes
+        SET used_at = #{usedAt}
+        WHERE id = #{id}
+          AND used_at IS NULL
+    </update>
+
+    <update id="incrementAttempts">
+        UPDATE email_codes
+        SET attempts = attempts + 1
+        WHERE id = #{id}
+    </update>
+
+    <select id="countSince" resultType="int">
+        SELECT COUNT(*)
+        FROM email_codes
+        WHERE email = #{email}
+          AND purpose = #{purpose}
+          AND created_at &gt;= #{since}
+    </select>
+
+</mapper>

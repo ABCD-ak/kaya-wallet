@@ -1,0 +1,47 @@
+# Kaya backend 配置模板
+# 本地开发：复制为 application.properties 后按需修改（该文件不入库）
+# Docker / 生产：无需复制，直接用同名大写环境变量覆盖，例如 JDBC_PASSWORD、JWT_SECRET
+#
+# 前端 Vite 开发服务器把 /api 代理到 http://localhost:8080（不 rewrite），
+# 因此 Jetty 使用 context path /api，控制器映射 /health、/categories 等。
+
+jdbc.url=jdbc:mysql://127.0.0.1:3306/kaya?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+jdbc.username=root
+jdbc.password=change-me
+
+jdbc.pool.maximum-pool-size=10
+jdbc.pool.minimum-idle=2
+jdbc.pool.connection-timeout-ms=3000
+# 数据库时间统一使用 UTC
+jdbc.connection-init-sql=SET time_zone = '+00:00'
+
+# JWT：secret 至少 32 字节，生产环境必须用 JWT_SECRET 覆盖
+jwt.secret=change-me-at-least-32-bytes-secret-key
+jwt.issuer=kaya
+jwt.access-token-ttl-seconds=3600
+jwt.refresh-token-ttl-days=30
+
+# 敏感字段加密：至少 32 字节；更换后已加密的证件号将无法解密
+security.field-encryption-key=change-me-at-least-32-bytes-encryption-key
+
+# 重置密码
+security.reset-token-ttl-minutes=30
+app.reset-password-url=http://localhost:5173/reset-password
+
+# 头像上传（相对路径基于工作目录）
+storage.avatar-dir=uploads/avatars
+storage.public-base-path=/api
+
+# ---------- 邮件（SMTP） ----------
+# QQ 邮箱：在设置中开启 SMTP 并使用 16 位授权码，不要填登录密码；465 端口需要 SSL
+mail.host=smtp.qq.com
+mail.port=465
+mail.username=your-account@qq.com
+mail.password=your-smtp-authorization-code
+mail.from=your-account@qq.com
+mail.from-name=卡雅 Kaya
+mail.ssl=true
+
+# ---------- Redis（限流，可选） ----------
+# 未配置时自动退化为单机内存限流
+redis.url=redis://127.0.0.1:6379

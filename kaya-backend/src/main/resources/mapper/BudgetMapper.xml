@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.BudgetMapper">
+
+    <resultMap id="budgetResultMap" type="com.kaya.entity.Budget">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="periodType" column="period_type"/>
+        <result property="periodStart" column="period_start"/>
+        <result property="periodEnd" column="period_end"/>
+        <result property="amountLimit" column="amount_limit"/>
+        <result property="alertThreshold" column="alert_threshold"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <association property="category" javaType="com.kaya.entity.Category">
+            <id property="id" column="cat_id"/>
+            <result property="code" column="cat_code"/>
+            <result property="type" column="cat_type"/>
+            <result property="name" column="cat_name"/>
+            <result property="icon" column="cat_icon"/>
+            <result property="color" column="cat_color"/>
+            <result property="sortOrder" column="cat_sort_order"/>
+            <result property="isActive" column="cat_is_active"/>
+        </association>
+    </resultMap>
+
+    <sql id="budgetSelect">
+        SELECT b.id, b.user_id, b.category_id, b.period_type, b.period_start, b.period_end,
+               b.amount_limit, b.alert_threshold, b.created_at, b.updated_at,
+               c.id AS cat_id, c.code AS cat_code, c.type AS cat_type, c.name AS cat_name,
+               c.icon AS cat_icon, c.color AS cat_color, c.sort_order AS cat_sort_order,
+               c.is_active AS cat_is_active
+        FROM budgets b
+        INNER JOIN categories c ON c.id = b.category_id
+    </sql>
+
+    <select id="search" resultMap="budgetResultMap">
+        <include refid="budgetSelect"/>
+        WHERE b.user_id = #{userId}
+          AND b.period_start &lt;= #{to}
+          AND b.period_end &gt;= #{from}
+        ORDER BY b.period_start ASC, b.id ASC
+    </select>
+
+    <select id="findByIdAndUserId" resultMap="budgetResultMap">
+        <include refid="budgetSelect"/>
+        WHERE b.id = #{id}
+          AND b.user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="findByCategoryAndMonth" resultMap="budgetResultMap">
+        <include refid="budgetSelect"/>
+        WHERE b.user_id = #{userId}
+          AND b.category_id = #{categoryId}
+          AND b.period_start = #{periodStart}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.kaya.entity.Budget"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO budgets
+            (user_id, category_id, period_type, period_start, period_end,
+             amount_limit, alert_threshold)
+        VALUES
+            (#{userId}, #{categoryId}, #{periodType}, #{periodStart}, #{periodEnd},
+             #{amountLimit}, #{alertThreshold})
+    </insert>
+
+    <update id="update">
+        UPDATE budgets
+        <set>
+            <if test="amountLimit != null">amount_limit = #{amountLimit},</if>
+            <if test="alertThreshold != null">alert_threshold = #{alertThreshold},</if>
+        </set>
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM budgets
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </delete>
+
+    <select id="sumSpent" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE user_id = #{userId}
+          AND category_id = #{categoryId}
+          AND type = 'expense'
+          AND status = 'success'
+          AND occurred_at &gt;= #{from}
+          AND occurred_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+    </select>
+
+</mapper>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kaya.mapper.WalletCardMapper">
+
+    <sql id="cardColumns">
+        id, user_id, wallet_id, card_type, brand, card_number_last4, holder_name,
+        expiry_month, expiry_year, currency_code, balance, credit_limit,
+        payment_token, is_primary AS primary_card, status, created_at, updated_at, deleted_at
+    </sql>
+
+    <select id="findByUserId" resultType="com.kaya.entity.WalletCard">
+        SELECT <include refid="cardColumns"/>
+        FROM wallet_cards
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        <if test="walletId != null">AND wallet_id = #{walletId}</if>
+        <if test="status != null">AND status = #{status}</if>
+        ORDER BY is_primary DESC, id ASC
+    </select>
+
+    <select id="findByIdAndUserId" resultType="com.kaya.entity.WalletCard">
+        SELECT <include refid="cardColumns"/>
+        FROM wallet_cards
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wallet_cards (
+            user_id, wallet_id, card_type, brand, card_number_last4, holder_name,
+            expiry_month, expiry_year, currency_code, balance, credit_limit,
+            payment_token, is_primary, status
+        )
+        VALUES (
+            #{userId}, #{walletId}, #{cardType}, #{brand}, #{cardNumberLast4}, #{holderName},
+            #{expiryMonth}, #{expiryYear}, #{currencyCode}, #{balance}, #{creditLimit},
+            #{paymentToken}, #{primaryCard}, #{status}
+        )
+    </insert>
+
+    <update id="clearPrimary">
+        UPDATE wallet_cards
+        SET is_primary = 0
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        <if test="exceptId != null">AND id != #{exceptId}</if>
+    </update>
+
+    <update id="deductBalance">
+        UPDATE wallet_cards
+        SET balance = balance - #{amount}
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND status = 'active'
+          AND deleted_at IS NULL
+          AND balance &gt;= #{amount}
+    </update>
+
+    <update id="markRemoved">
+        UPDATE wallet_cards
+        SET status = 'removed',
+            deleted_at = #{removedAt}
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+</mapper>
