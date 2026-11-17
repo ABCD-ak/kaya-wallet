@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/swagger.html", "destination": "/swagger.html" },
+    { "source": "/openapi.json", "destination": "/openapi.json" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

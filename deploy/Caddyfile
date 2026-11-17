@@ -1,0 +1,15 @@
+# Caddy 反向代理：自动申请/续期 Let's Encrypt 证书
+# SITE_ADDRESS 取值：
+#   有域名        api.example.com        （自动 HTTPS）
+#   免费域名      140.238.1.2.sslip.io   （自动 HTTPS）
+#   仅本机调试    :80                     （HTTP）
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# 后端 context path 就是 /api，不做路径重写
+	reverse_proxy /api/* api:8080
+
+	# 便于排查部署是否成功
+	respond /healthz 200
+}
