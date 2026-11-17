@@ -1,0 +1,394 @@
+[
+ {
+  "id": "888E0159-9834-48BE-9E7D-6DB19C96AC08",
+  "name": "Path 10",
+  "w": 377,
+  "h": 238,
+  "file": "assets/path-10-f-0.png"
+ },
+ {
+  "id": "F0287879-F038-4F65-85D6-48D07A3BFF5B",
+  "name": "ic_notif",
+  "w": 36,
+  "h": 36,
+  "file": "assets/ic-notif-e-1.png"
+ },
+ {
+  "id": "74E67902-55DD-478D-B715-C84123781FCC",
+  "name": "Battery",
+  "w": 25,
+  "h": 12,
+  "file": "assets/battery-d-2.png"
+ },
+ {
+  "id": "993C671D-ACDA-47B1-90D5-E2377E1F9E6A",
+  "name": "Wifi",
+  "w": 15.27237626493792,
+  "h": 10.96557160629883,
+  "file": "assets/wifi-a-3.png"
+ },
+ {
+  "id": "BBFB579E-796E-4D53-8DC3-488A33CE7272",
+  "name": "Cellular Connection",
+  "w": 17,
+  "h": 10.66666666666667,
+  "file": "assets/cellular-connection-p-4.png"
+ },
+ {
+  "id": "639994DD-B986-424B-959A-CA45D5A1A6B9",
+  "name": "Group 2",
+  "w": 50,
+  "h": 50,
+  "file": "assets/group-2-d-5.png"
+ },
+ {
+  "id": "F957E0DE-772E-49ED-A0B1-7A365D9ACC33",
+  "name": "Group 2 Copy",
+  "w": 50,
+  "h": 50,
+  "file": "assets/group-2-copy-i-6.png"
+ },
+ {
+  "id": "64F5A4F9-B96F-4780-B360-BE955CC3FE2B",
+  "name": "ic_house",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-house-e-7.png"
+ },
+ {
+  "id": "F35EDD7E-9DA4-4BC2-8A97-086728F6CA1F",
+  "name": "ic_food&drink",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-food-drink-j-8.png"
+ },
+ {
+  "id": "4B84BBBB-F4FC-4881-9B10-6F671AD04D4E",
+  "name": "ic_fashion",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-fashion-g-9.png"
+ },
+ {
+  "id": "B7965447-C486-4AA6-92C3-D8F97F3A9B2A",
+  "name": "ic_travelling",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-travelling-j-a.png"
+ },
+ {
+  "id": "5303CD02-FD29-46E0-9013-948B8363197B",
+  "name": "iconspace_Down_25px",
+  "w": 14,
+  "h": 14,
+  "file": "assets/iconspace-down-25px-p-b.png"
+ },
+ {
+  "id": "AD8E879B-4271-4FFC-A2D5-34A2719555B7",
+  "name": "Group",
+  "w": 24,
+  "h": 24,
+  "file": "assets/group-b-c.png"
+ },
+ {
+  "id": "25779BE6-084E-4416-9ACB-EBAC2DD7136B",
+  "name": "Path 6 Copy 3",
+  "w": 82,
+  "h": 29.96423336611313,
+  "file": "assets/path-6-copy-3-j-d.png"
+ },
+ {
+  "id": "C1D37F41-E943-4EFD-9287-D566174F8ECC",
+  "name": "#menu",
+  "w": 375,
+  "h": 96,
+  "file": "assets/menu-c-e.png"
+ },
+ {
+  "id": "668534AC-A6D2-4A1B-8D1C-4EC55A6BFBCE",
+  "name": "ic_security tips",
+  "w": 64,
+  "h": 64,
+  "file": "assets/ic-security-tips-m-f.png"
+ },
+ {
+  "id": "2D1F554F-D6E9-4F2F-8DC4-747D45F047BC",
+  "name": "visa logo",
+  "w": 50,
+  "h": 20,
+  "file": "assets/visa-logo-f-g.png"
+ },
+ {
+  "id": "33AD1978-0335-4EED-8A0A-CA8D702085AC",
+  "name": "ic_back",
+  "w": 36,
+  "h": 36,
+  "file": "assets/ic-back-d-h.png"
+ },
+ {
+  "id": "B13BB4CA-0EC9-407D-8792-BF2D01CE5104",
+  "name": "ic_pp",
+  "w": 80,
+  "h": 80,
+  "file": "assets/ic-pp-b-i.png"
+ },
+ {
+  "id": "9F0B2054-9D07-4CA1-8160-5141A612B6C9",
+  "name": "ic_logout",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-logout-f-j.png"
+ },
+ {
+  "id": "A8E3EA09-F059-49A5-9FCA-718E0C7AEB6E",
+  "name": "ic_about us",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-about-us-h-k.png"
+ },
+ {
+  "id": "61234506-269D-48C8-8BD5-5827DFD18902",
+  "name": "ic_CS woman",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-cs-woman-h-l.png"
+ },
+ {
+  "id": "BF7F225B-AEAE-4C9F-8C50-C8A37A050FA3",
+  "name": "ic_verification",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-verification-l-m.png"
+ },
+ {
+  "id": "CF508940-1592-45BB-AAB2-D52F2C5FFDC2",
+  "name": "ic_notif",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-notif-e-n.png"
+ },
+ {
+  "id": "DD1C67CD-D71E-414B-BA8A-BB95850586BE",
+  "name": "ic_address",
+  "w": 35,
+  "h": 35,
+  "file": "assets/ic-address-g-o.png"
+ },
+ {
+  "id": "EA436C0C-031E-453B-A42B-7CB2A4626902",
+  "name": "logo_visa",
+  "w": 36,
+  "h": 34,
+  "file": "assets/logo-visa-f-p.png"
+ },
+ {
+  "id": "78D6C4B6-46F8-4517-8049-189213822F41",
+  "name": "Oval",
+  "w": 34,
+  "h": 34,
+  "file": "assets/oval-a-q.png"
+ },
+ {
+  "id": "863353B1-9EC6-4AC6-81E6-27136027120C",
+  "name": "ic_share",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-share-e-r.png"
+ },
+ {
+  "id": "445240CF-11BB-4F90-A1CA-2F957EF87AF7",
+  "name": "ic_expense",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-expense-g-s.png"
+ },
+ {
+  "id": "3AD2E83D-44AC-49C0-B3B5-20695222D2B1",
+  "name": "ic_invoice payment",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-invoice-payment-o-t.png"
+ },
+ {
+  "id": "B8C79BE4-E8A0-4F72-96F5-BBFCB41F1D4D",
+  "name": "ic_income",
+  "w": 34,
+  "h": 34,
+  "file": "assets/ic-income-f-u.png"
+ },
+ {
+  "id": "607261B6-8044-4221-BF74-507572062FC4",
+  "name": "dribbble",
+  "w": 34,
+  "h": 34,
+  "file": "assets/dribbble-e-v.png"
+ },
+ {
+  "id": "4BB95E5D-247B-4BF5-ABF1-8CCB7DE318CD",
+  "name": "sketch-2-logo-png-transparent",
+  "w": 26,
+  "h": 24,
+  "file": "assets/sketch-2-logo-png-transparent-z-w.png"
+ },
+ {
+  "id": "8C408495-CDC8-4604-82A0-B0B3B37966FA",
+  "name": "playstation-logo",
+  "w": 25,
+  "h": 19,
+  "file": "assets/playstation-logo-m-x.png"
+ },
+ {
+  "id": "F366686B-CD88-44FE-890F-AA1E16D25158",
+  "name": "ic_see more",
+  "w": 24,
+  "h": 24,
+  "file": "assets/ic-see-more-h-y.png"
+ },
+ {
+  "id": "B4B443E2-5E11-4CA8-8292-DA41021BB066",
+  "name": "Group 3",
+  "w": 24,
+  "h": 24,
+  "file": "assets/group-3-d-z.png"
+ },
+ {
+  "id": "C51D2C8E-4AAB-4D12-8F08-E86D87515B05",
+  "name": "ic_cancel",
+  "w": 36,
+  "h": 36,
+  "file": "assets/ic-cancel-f-10.png"
+ },
+ {
+  "id": "C879F5F6-8B70-4B50-9A5F-F029BC37FFA8",
+  "name": "ic_success",
+  "w": 128,
+  "h": 128,
+  "file": "assets/ic-success-i-11.png"
+ },
+ {
+  "id": "46AE9012-E13E-4102-ACAA-52B0B4A0387D",
+  "name": "Chart, money, finance Finance",
+  "w": 148,
+  "h": 127,
+  "file": "assets/chart-money-finance-finance-11-12.png"
+ },
+ {
+  "id": "060800E0-F416-45B7-BCAA-3A92582971AA",
+  "name": "Dictation",
+  "w": 15.00000560866636,
+  "h": 24.99739543195544,
+  "file": "assets/dictation-f-13.png"
+ },
+ {
+  "id": "210F3918-F981-4C97-9CCB-A8BE51F0744D",
+  "name": "Delete",
+  "w": 22.61768317437182,
+  "h": 18,
+  "file": "assets/delete-c-14.png"
+ },
+ {
+  "id": "59D10BB5-31D8-49C7-8B21-D86275CFD0C2",
+  "name": "Oval Copy 4",
+  "w": 34,
+  "h": 34,
+  "file": "assets/oval-copy-4-h-15.png"
+ },
+ {
+  "id": "16936AF1-95C9-41EF-B7E3-92C7FC8D1485",
+  "name": "iconspace_Search_Zoom_25px",
+  "w": 24,
+  "h": 24,
+  "file": "assets/iconspace-search-zoom-25px-w-16.png"
+ },
+ {
+  "id": "A66BB46A-A80A-4808-A180-9A75F5AE568F",
+  "name": "Oval Copy 3",
+  "w": 34,
+  "h": 34,
+  "file": "assets/oval-copy-3-h-17.png"
+ },
+ {
+  "id": "15D8591F-3C67-492F-8C92-1B34FD5C91DB",
+  "name": "ic_selected",
+  "w": 25,
+  "h": 25,
+  "file": "assets/ic-selected-h-18.png"
+ },
+ {
+  "id": "8CB82748-CCBF-4991-B965-7D254923C52A",
+  "name": "ic_hamburger copy 2",
+  "w": 20,
+  "h": 20,
+  "file": "assets/ic-hamburger-copy-2-p-19.png"
+ },
+ {
+  "id": "198952A9-59A1-4389-A5B6-95F681FE8936",
+  "name": "ic_hamburger copy 3",
+  "w": 20,
+  "h": 20,
+  "file": "assets/ic-hamburger-copy-3-p-1a.png"
+ },
+ {
+  "id": "9D489A06-90F5-4438-AD1F-447F9E165ABC",
+  "name": "ic_add income",
+  "w": 42,
+  "h": 42,
+  "file": "assets/ic-add-income-j-1b.png"
+ },
+ {
+  "id": "043F2A55-0AA4-4487-A27C-E7E1C2E7EB18",
+  "name": "ic_new expense",
+  "w": 42,
+  "h": 42,
+  "file": "assets/ic-new-expense-k-1c.png"
+ },
+ {
+  "id": "7F6A1BC4-1368-4E99-B959-C8263684D1B4",
+  "name": "ic_correct",
+  "w": 25,
+  "h": 25,
+  "file": "assets/ic-correct-g-1d.png"
+ },
+ {
+  "id": "65B27B98-D605-4031-B897-2CFF8A54DA06",
+  "name": "ic_false",
+  "w": 25,
+  "h": 25,
+  "file": "assets/ic-false-e-1e.png"
+ },
+ {
+  "id": "E2BCDF9B-C029-4415-AC52-9108CCD07D9E",
+  "name": "bg",
+  "w": 375,
+  "h": 812,
+  "file": "assets/bg-a-1f.png"
+ },
+ {
+  "id": "EF0FB990-EEE7-49C4-A556-854857BA55A1",
+  "name": "ic_logo",
+  "w": 48,
+  "h": 48,
+  "file": "assets/ic-logo-d-1g.png"
+ },
+ {
+  "id": "442833F1-A5B4-4972-A1EA-52187F333EFD",
+  "name": "Money Buy Chart Finance",
+  "w": 232,
+  "h": 245,
+  "file": "assets/money-buy-chart-finance-v-1h.png"
+ },
+ {
+  "id": "16556CC1-801E-4079-8296-9A7E94032BF5",
+  "name": "Invest Data Finance",
+  "w": 219,
+  "h": 260,
+  "file": "assets/invest-data-finance-r-1i.png"
+ },
+ {
+  "id": "81FB6BB3-9041-41F9-8AC0-2FC8441C27C8",
+  "name": "Safety Payment Data Finance",
+  "w": 240,
+  "h": 247,
+  "file": "assets/safety-payment-data-finance-z-1j.png"
+ }
+]

@@ -1,0 +1,101 @@
+// ============ Poppins 字体 ============
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Poppins-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Poppins-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Poppins-Bold.ttf') format('truetype');
+}
+
+// ============ 全局 reset ============
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// ============ 设计变量（原始青绿风格） ============
+:root {
+  --app-bg: #f7f6f8;
+  --app-surface: #ffffff;
+  --app-ink: #353333;
+  --app-muted: #696565;
+  --app-subtle: #afafaf;
+  --app-line: #f0eeef;
+  --app-line-soft: #f6f6f6;
+  --app-accent: #17b7bd;
+  --app-accent-soft: #e9f9f5;
+  --app-primary: #17b7bd;
+  --app-danger: #ef6874;
+  --app-radius: 16px;
+
+  // Element Plus 主题
+  --el-color-primary: #17b7bd;
+  --el-color-primary-light-3: #5dcdd1;
+  --el-color-primary-light-5: #8bdcdf;
+  --el-color-primary-light-7: #b9ebed;
+  --el-color-primary-light-8: #d1f2f3;
+  --el-color-primary-light-9: #e8f9f9;
+  --el-color-primary-dark-2: #129297;
+  --el-border-radius-base: 12px;
+  --el-text-color-primary: #353333;
+  --el-text-color-regular: #696565;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--app-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--app-ink);
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  font-feature-settings: 'tnum';
+}
+
+a { text-decoration: none; color: inherit; }
+button, input, textarea { font-family: inherit; }
+
+// 移动端隐藏滚动条，避免不同页面宽度和底栏位置不一致
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Element Plus 覆盖 */
+.el-message { font-family: 'Poppins', 'PingFang SC', sans-serif !important; }

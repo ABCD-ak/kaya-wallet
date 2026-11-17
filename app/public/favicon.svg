@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#17b7bd"/>
+      <stop offset="100%" stop-color="#9deb93"/>
+    </linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e8fff5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#0d8e94" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- 背景圆角方 -->
+  <rect width="64" height="64" rx="16" ry="16" fill="url(#bg)"/>
+  <!-- 顶部高光 -->
+  <rect x="0" y="0" width="64" height="32" rx="16" ry="16" fill="url(#hl)"/>
+  <!-- 硬币圆环 -->
+  <circle cx="32" cy="34" r="19" fill="none" stroke="url(#coin)" stroke-width="2.5" opacity="0.9"/>
+  <!-- 硬币内圈 -->
+  <circle cx="32" cy="34" r="15.5" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.45"/>
+  <!-- K 字 -->
+  <text x="32" y="43" font-family="Poppins, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" filter="url(#shadow)">K</text>
+</svg>
