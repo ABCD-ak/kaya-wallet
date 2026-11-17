@@ -1,0 +1,6036 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Kaya Wallet API",
+    "version": "1.0.0",
+    "description": "Kaya 移动端钱包接口文档，依据即时设计 23 个画板与 `db/schema.sql` 设计。\n\n## 约定\n- Base URL：`/api`（与部署域名同源），本地 `http://localhost:8080/api`\n- 除注册/登录/刷新/找回密码外，均需 `Authorization: Bearer <accessToken>`\n- 统一响应：`{ code, message, requestId, data }`；`code = 0` 表示成功\n- 金额与 ID 均用字符串传输：金额两位小数（如 `\"150.00\"`），ID 为数字字符串，避免 JS 精度丢失\n- 时间使用 ISO 8601 UTC，如 `2026-11-12T08:00:00.000Z`\n- 分页参数 `page` / `pageSize`，返回 `{ items, page, pageSize, total, totalPages }`\n- 所有资金变动接口必须带 `Idempotency-Key`，同键重放返回首次结果\n- 余额、月度收支、预算使用率、回执均为流水派生数据，不单独存储\n\n## 主要错误码\n| code | HTTP | 含义 |\n| --- | --- | --- |\n| 0 | 200/201 | 成功 |\n| 40001 | 400 | 参数错误 |\n| 40101 | 401 | 未登录或令牌失效 |\n| 40301 | 403 | 无权限 / 账号被锁定 |\n| 40401 | 404 | 资源不存在 |\n| 40901 | 409 | 唯一键冲突 |\n| 42201 | 422 | 业务校验失败（如余额不足） |\n| 42901 | 429 | 请求过于频繁 |\n| 50000 | 500 | 服务器内部错误 |\n\n## 与数据库的对应\n用户 `users` / `user_settings` / `user_addresses` / `user_verifications`，钱包 `wallets`，银行卡 `wallet_cards`，分类 `categories`，预算 `budgets`，联系人 `recipients`，流水 `transactions`，通知 `notifications`。`user_sessions` / `password_reset_tokens` 为服务端内部表，不直接暴露。"
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "当前部署（与页面同源）"
+    },
+    {
+      "url": "http://localhost:8080/api",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth 认证",
+      "description": "注册、登录、刷新、退出、找回密码"
+    },
+    {
+      "name": "Users 用户",
+      "description": "个人资料、设置、认证"
+    },
+    {
+      "name": "Wallets 钱包",
+      "description": "余额、月度汇总、首页流水"
+    },
+    {
+      "name": "Cards 银行卡",
+      "description": "信用卡/借记卡"
+    },
+    {
+      "name": "Transactions 交易",
+      "description": "收支流水、月度汇总、回执"
+    },
+    {
+      "name": "Transfers 转账",
+      "description": "转账试算、发起转账、转账详情"
+    },
+    {
+      "name": "Recipients 联系人",
+      "description": "转账联系人"
+    },
+    {
+      "name": "Categories 分类",
+      "description": "系统收支分类"
+    },
+    {
+      "name": "Budgets 预算",
+      "description": "分类月度预算与使用率"
+    },
+    {
+      "name": "Notifications 通知",
+      "description": "到账、预算提醒等消息"
+    },
+    {
+      "name": "Addresses 地址",
+      "description": "收货/联系地址"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "注册",
+        "description": "注册成功后同一事务内创建用户、偏好设置和默认 USD 钱包，并直接返回登录令牌。重复邮箱或用户名返回 409。",
+        "operationId": "register",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              },
+              "example": {
+                "displayName": "Nick Furry",
+                "email": "nickfurry@gmail.com",
+                "password": "P@ssw0rd!",
+                "username": "nickfurry"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AuthTokens"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "登录",
+        "description": "邮箱 + 密码登录。密码错误返回 401；账号锁定/禁用返回 403。",
+        "operationId": "login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "email": "Nickfurry@gmail.com",
+                "password": "P@ssw0rd!"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AuthTokens"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "刷新令牌",
+        "description": "刷新令牌轮换：旧 refreshToken 立即失效，返回新的 accessToken + refreshToken。",
+        "operationId": "refreshToken",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "刷新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AuthTokens"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "退出登录",
+        "description": "吊销当前会话的刷新令牌。无请求体时吊销当前 accessToken 对应的会话。",
+        "operationId": "logout",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "description": "刷新令牌；不传则按当前会话吊销",
+                    "example": "rt_01J9Z8K3W6Q4M2N7P5R8T1V0X3"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已退出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "发送重置密码邮件",
+        "description": "无论邮箱是否存在都返回成功，避免账号枚举。",
+        "operationId": "forgotPassword",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              },
+              "example": {
+                "email": "Nickfurry@gmail.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已受理",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "description": "发送过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth 认证"
+        ],
+        "summary": "重置密码",
+        "description": "使用邮件中的一次性令牌设置新密码；令牌过期或已使用返回 400。",
+        "operationId": "resetPassword",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "密码已重置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "410": {
+            "description": "重置令牌已过期或已使用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "获取当前用户",
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "编辑个人资料",
+        "description": "对应「Edit Profile」画板；只传需要修改的字段。用户名冲突返回 409。",
+        "operationId": "updateCurrentUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              },
+              "example": {
+                "displayName": "Nick J Furry",
+                "username": "nickfurrybosku",
+                "gender": "male",
+                "birthday": "1945-08-17",
+                "phone": "+621234456744"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me/avatar": {
+      "post": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "上传头像",
+        "description": "multipart/form-data，单文件，支持 jpg/png/webp，最大 5MB。",
+        "operationId": "uploadAvatar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "头像文件"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "avatarUrl": {
+                          "type": "string",
+                          "description": "新头像地址",
+                          "example": "https://cdn.kaya.app/avatars/10001.png",
+                          "format": "uri"
+                        }
+                      },
+                      "required": [
+                        "avatarUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "description": "文件超过大小限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me/password": {
+      "put": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "修改密码",
+        "description": "对应交易页安全提示「Set password」；修改成功后其他会话的刷新令牌全部失效。",
+        "operationId": "changePassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "密码已修改",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me/settings": {
+      "get": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "获取偏好设置",
+        "operationId": "getUserSettings",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserSettings"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "更新偏好设置",
+        "operationId": "updateUserSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingsRequest"
+              },
+              "example": {
+                "locale": "zh-CN",
+                "timezone": "Asia/Shanghai",
+                "defaultCurrencyCode": "USD",
+                "pushEnabled": true,
+                "emailEnabled": true,
+                "smsEnabled": false,
+                "marketingEnabled": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserSettings"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/me/verifications": {
+      "get": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "获取认证状态",
+        "description": "对应 Account 页「Verifications」入口。",
+        "operationId": "listVerifications",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Verification"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Users 用户"
+        ],
+        "summary": "提交认证",
+        "description": "证件号只在传输中提交，服务端加密存储，接口仅返回后四位。已存在同类型认证时返回 409。",
+        "operationId": "submitVerification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVerificationRequest"
+              },
+              "example": {
+                "type": "identity",
+                "documentType": "ID_CARD",
+                "documentNo": "3171234567891234"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已提交，等待审核",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Verification"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/wallets": {
+      "get": {
+        "tags": [
+          "Wallets 钱包"
+        ],
+        "summary": "我的钱包列表",
+        "description": "对应 Wallet 首页；通常只有一个 USD 钱包，多币种时返回多个。",
+        "operationId": "listWallets",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Wallet"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/wallets/{walletId}/summary": {
+      "get": {
+        "tags": [
+          "Wallets 钱包"
+        ],
+        "summary": "钱包月度汇总",
+        "description": "返回缓存余额与指定月份的收入/支出。收入、支出从成功流水实时聚合，对应首页 Income / Spent。",
+        "operationId": "getWalletSummary",
+        "parameters": [
+          {
+            "name": "walletId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "20001"
+            },
+            "description": "钱包 ID"
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "description": "统计月份 YYYY-MM",
+              "example": "2026-11"
+            },
+            "description": "统计月份，默认当前月"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WalletSummary"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/wallets/{walletId}/transactions": {
+      "get": {
+        "tags": [
+          "Wallets 钱包"
+        ],
+        "summary": "钱包首页交易列表",
+        "description": "对应首页 All / Received / Send 筛选。direction=credit 为 Received，debit 为 Send；不传为 All。",
+        "operationId": "listWalletTransactions",
+        "parameters": [
+          {
+            "name": "walletId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "20001"
+            },
+            "description": "钱包 ID"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "资金方向",
+              "example": "debit",
+              "enum": [
+                "credit",
+                "debit"
+              ]
+            },
+            "description": "资金方向"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "交易类型",
+              "example": "transfer_out",
+              "enum": [
+                "income",
+                "expense",
+                "transfer_out",
+                "transfer_in",
+                "refund"
+              ]
+            },
+            "description": "交易类型"
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "description": "统计月份 YYYY-MM",
+              "example": "2026-09"
+            },
+            "description": "按月份筛选"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "备注/对方名称关键词",
+              "example": "Dribbble"
+            },
+            "description": "关键词搜索"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "页码，从 1 开始",
+              "example": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 开始"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "每页条数",
+              "example": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TransactionPage"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/cards": {
+      "get": {
+        "tags": [
+          "Cards 银行卡"
+        ],
+        "summary": "我的银行卡",
+        "description": "对应 Credit Card 画板。只返回后四位，不返回完整卡号/CVV。",
+        "operationId": "listCards",
+        "parameters": [
+          {
+            "name": "walletId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "description": "ID，字符串传输避免 JS 精度丢失",
+              "example": "20001"
+            },
+            "description": "按钱包筛选"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "卡状态",
+              "example": "active",
+              "enum": [
+                "active",
+                "expired",
+                "frozen",
+                "removed"
+              ]
+            },
+            "description": "卡状态"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WalletCard"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Cards 银行卡"
+        ],
+        "summary": "绑定银行卡",
+        "description": "支付信息由支付网关 token 化；禁止提交完整卡号、CVV。",
+        "operationId": "createCard",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCardRequest"
+              },
+              "example": {
+                "cardType": "credit",
+                "brand": "visa",
+                "last4": "7281",
+                "holderName": "Mr Antono Hann",
+                "expiryMonth": 9,
+                "expiryYear": 2028,
+                "currencyCode": "USD",
+                "paymentToken": "tok_visa_123456",
+                "isPrimary": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "绑定成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WalletCard"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/cards/{cardId}": {
+      "delete": {
+        "tags": [
+          "Cards 银行卡"
+        ],
+        "summary": "解绑银行卡",
+        "description": "软删除，历史交易回执仍保留卡号后四位快照。",
+        "operationId": "deleteCard",
+        "parameters": [
+          {
+            "name": "cardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "21001"
+            },
+            "description": "银行卡 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已解绑",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "get": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "交易列表",
+        "description": "全局交易流水，支持按钱包、类型、方向、分类、时间范围筛选。",
+        "operationId": "listTransactions",
+        "parameters": [
+          {
+            "name": "walletId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "description": "ID，字符串传输避免 JS 精度丢失",
+              "example": "20001"
+            },
+            "description": "钱包 ID"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "交易类型",
+              "example": "transfer_out",
+              "enum": [
+                "income",
+                "expense",
+                "transfer_out",
+                "transfer_in",
+                "refund"
+              ]
+            },
+            "description": "交易类型"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "资金方向",
+              "example": "debit",
+              "enum": [
+                "credit",
+                "debit"
+              ]
+            },
+            "description": "资金方向"
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "description": "ID，字符串传输避免 JS 精度丢失",
+              "example": "22001"
+            },
+            "description": "分类 ID"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 UTC 时间",
+              "example": "2026-11-01T00:00:00.000Z"
+            },
+            "description": "开始时间（含）"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 UTC 时间",
+              "example": "2026-12-01T00:00:00.000Z"
+            },
+            "description": "结束时间（不含）"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "页码，从 1 开始",
+              "example": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 开始"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "每页条数",
+              "example": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TransactionPage"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "记一笔收入/支出",
+        "description": "对应 Input Expense 画板。服务端在同一事务内写流水并更新钱包余额；amount 始终为正，方向由 type 推导。",
+        "operationId": "createTransaction",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "example": "9f1c2a7e-4b6d-4e1a-9c3f-8d2b7a5e1f00"
+            },
+            "description": "客户端生成的唯一幂等键（建议 UUID）。同键重放返回首次结果，不会重复扣款。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransactionRequest"
+              },
+              "example": {
+                "walletId": "20001",
+                "type": "expense",
+                "amount": "25.00",
+                "categoryId": "22001",
+                "note": "Buy a Sate Klathak",
+                "occurredAt": "2018-09-18T10:30:24.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "记账成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Transaction"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transactions/summary": {
+      "get": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "月度交易汇总",
+        "description": "对应 Transactions 画板 Total Transactions / 分类占比。按成功流水聚合，包含分类排行。",
+        "operationId": "getTransactionSummary",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "description": "统计月份 YYYY-MM",
+              "example": "2026-11"
+            },
+            "description": "统计月份，默认当前月"
+          },
+          {
+            "name": "walletId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "description": "ID，字符串传输避免 JS 精度丢失",
+              "example": "20001"
+            },
+            "description": "钱包 ID，不传则统计当前用户全部钱包"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TransactionSummary"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}": {
+      "get": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "交易详情",
+        "operationId": "getTransaction",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "23001"
+            },
+            "description": "交易 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Transaction"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}/receipt": {
+      "get": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "获取回执",
+        "description": "回执由交易流水 + 对手快照实时生成，不单独落库。",
+        "operationId": "getTransactionReceipt",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "23001"
+            },
+            "description": "交易 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Receipt"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}/receipt/download": {
+      "get": {
+        "tags": [
+          "Transactions 交易"
+        ],
+        "summary": "下载回执 PDF",
+        "description": "对应 Download Receipt。返回 application/pdf 二进制流。",
+        "operationId": "downloadTransactionReceipt",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "23001"
+            },
+            "description": "交易 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF 文件",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transfers/quote": {
+      "post": {
+        "tags": [
+          "Transfers 转账"
+        ],
+        "summary": "转账试算",
+        "description": "对应 Add Amount 画板，返回本金、5% 手续费、合计扣款与余额是否充足。不产生流水。",
+        "operationId": "quoteTransfer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferQuoteRequest"
+              },
+              "example": {
+                "walletId": "20001",
+                "recipientId": "24001",
+                "amount": "150.00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TransferQuote"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transfers": {
+      "post": {
+        "tags": [
+          "Transfers 转账"
+        ],
+        "summary": "发起转账",
+        "description": "对应 Send Money → Add Amount → Money Sent。必须带 Idempotency-Key；服务端写 transfer_out 流水、扣本金+手续费，并生成消息通知。",
+        "operationId": "createTransfer",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "example": "9f1c2a7e-4b6d-4e1a-9c3f-8d2b7a5e1f00"
+            },
+            "description": "客户端生成的唯一幂等键（建议 UUID）。同键重放返回首次结果，不会重复扣款。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransferRequest"
+              },
+              "example": {
+                "walletId": "20001",
+                "recipientId": "24001",
+                "amount": "150.00",
+                "note": "Monthly student payment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "转账成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Transfer"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/transfers/{transferId}": {
+      "get": {
+        "tags": [
+          "Transfers 转账"
+        ],
+        "summary": "转账详情",
+        "operationId": "getTransfer",
+        "parameters": [
+          {
+            "name": "transferId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "23001"
+            },
+            "description": "转账流水 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Transfer"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/recipients": {
+      "get": {
+        "tags": [
+          "Recipients 联系人"
+        ],
+        "summary": "联系人列表",
+        "description": "对应 Send Money 画板 Recent contacts / All contacts。recent=true 按 last_used_at 倒序返回常用联系人。",
+        "operationId": "listRecipients",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "姓名/账号/手机号关键词",
+              "example": "T’Challa"
+            },
+            "description": "关键词搜索"
+          },
+          {
+            "name": "recent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回最近联系人",
+              "example": true
+            },
+            "description": "只返回最近联系人"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "页码，从 1 开始",
+              "example": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 开始"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "每页条数",
+              "example": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RecipientPage"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Recipients 联系人"
+        ],
+        "summary": "新增联系人",
+        "description": "对应 Add recipient。同一用户的 accountNo 不可重复。",
+        "operationId": "createRecipient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecipientRequest"
+              },
+              "example": {
+                "displayName": "King M’baku",
+                "accountNo": "123456789013",
+                "bankName": "Kaya Bank",
+                "isFavorite": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已新增",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Recipient"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/recipients/{recipientId}": {
+      "patch": {
+        "tags": [
+          "Recipients 联系人"
+        ],
+        "summary": "编辑联系人",
+        "operationId": "updateRecipient",
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "24001"
+            },
+            "description": "联系人 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecipientRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Recipient"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Recipients 联系人"
+        ],
+        "summary": "删除联系人",
+        "description": "软删除；历史交易回执中的对手快照不受影响。",
+        "operationId": "deleteRecipient",
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "24001"
+            },
+            "description": "联系人 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": [
+          "Categories 分类"
+        ],
+        "summary": "收支分类",
+        "description": "系统预置分类，用于记账和预算。type 不传返回全部。",
+        "operationId": "listCategories",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "收入或支出",
+              "example": "expense",
+              "enum": [
+                "income",
+                "expense"
+              ]
+            },
+            "description": "收支类型"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/budgets": {
+      "get": {
+        "tags": [
+          "Budgets 预算"
+        ],
+        "summary": "月度预算列表",
+        "description": "对应 Transactions 画板的预算条。spent / usedPercent 从成功支出流水实时聚合，status 由使用率推导。",
+        "operationId": "listBudgets",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "description": "统计月份 YYYY-MM",
+              "example": "2026-11"
+            },
+            "description": "统计月份，默认当前月"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Budget"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Budgets 预算"
+        ],
+        "summary": "新增预算",
+        "description": "同一用户、分类、月份唯一；重复返回 409。",
+        "operationId": "createBudget",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBudgetRequest"
+              },
+              "example": {
+                "categoryId": "22001",
+                "month": "2026-11",
+                "amountLimit": "1363.64",
+                "alertThreshold": 80
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/budgets/{budgetId}": {
+      "patch": {
+        "tags": [
+          "Budgets 预算"
+        ],
+        "summary": "调整预算",
+        "operationId": "updateBudget",
+        "parameters": [
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "25001"
+            },
+            "description": "预算 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBudgetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Budget"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Budgets 预算"
+        ],
+        "summary": "删除预算",
+        "operationId": "deleteBudget",
+        "parameters": [
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "25001"
+            },
+            "description": "预算 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": [
+          "Notifications 通知"
+        ],
+        "summary": "通知列表",
+        "description": "对应 Notifications 画板。按 createdAt 倒序；客户端按 Recent / Older 分组展示。",
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "name": "isRead",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "是否已读",
+              "example": false
+            },
+            "description": "只看已读/未读，不传返回全部"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "页码，从 1 开始",
+              "example": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 开始"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "每页条数",
+              "example": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationPage"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "Notifications 通知"
+        ],
+        "summary": "未读通知数",
+        "description": "对应首页通知红点。",
+        "operationId": "getUnreadNotificationCount",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "description": "未读数",
+                          "example": 3
+                        }
+                      },
+                      "required": [
+                        "count"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "patch": {
+        "tags": [
+          "Notifications 通知"
+        ],
+        "summary": "标记单条已读",
+        "operationId": "markNotificationRead",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "26001"
+            },
+            "description": "通知 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Notification"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications 通知"
+        ],
+        "summary": "全部标记已读",
+        "operationId": "markAllNotificationsRead",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updatedCount": {
+                          "type": "integer",
+                          "description": "更新条数",
+                          "example": 3
+                        }
+                      },
+                      "required": [
+                        "updatedCount"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/addresses": {
+      "get": {
+        "tags": [
+          "Addresses 地址"
+        ],
+        "summary": "地址列表",
+        "description": "对应 Account 页 Address 入口。",
+        "operationId": "listAddresses",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Address"
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Addresses 地址"
+        ],
+        "summary": "新增地址",
+        "description": "isDefault=true 时服务端取消该用户其他默认地址。",
+        "operationId": "createAddress",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddressRequest"
+              },
+              "example": {
+                "label": "Home",
+                "recipientName": "Nick J Furry",
+                "phone": "+621234456744",
+                "countryCode": "ID",
+                "city": "Jakarta",
+                "detailAddress": "Jl. Example No. 10",
+                "postalCode": "12140",
+                "isDefault": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已新增",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Address"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/addresses/{addressId}": {
+      "patch": {
+        "tags": [
+          "Addresses 地址"
+        ],
+        "summary": "编辑地址",
+        "operationId": "updateAddress",
+        "parameters": [
+          {
+            "name": "addressId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "27001"
+            },
+            "description": "地址 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddressRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Address"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Addresses 地址"
+        ],
+        "summary": "删除地址",
+        "operationId": "deleteAddress",
+        "parameters": [
+          {
+            "name": "addressId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "27001"
+            },
+            "description": "地址 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务码，0 表示成功",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息",
+                      "example": "ok"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "请求 ID，便于排查",
+                      "example": "req_01J9Z8K3"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "在 Authorization 头中传 `Bearer <accessToken>`"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "请求参数错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "未登录、令牌无效或已过期",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "无权限执行该操作",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "资源不存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "资源冲突，如邮箱/用户名已存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "业务校验失败，如余额不足",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "服务器内部错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务码，0 表示成功",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息",
+            "example": "ok"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "请求 ID，便于排查",
+            "example": "req_01J9Z8K3"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "description": "业务数据"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务错误码",
+            "example": 40101
+          },
+          "message": {
+            "type": "string",
+            "description": "错误信息",
+            "example": "登录状态已失效"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "请求 ID",
+            "example": "req_01J9Z8K3"
+          },
+          "details": {
+            "type": "object",
+            "description": "字段级校验错误，key 为字段名",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "example": {
+              "email": [
+                "邮箱格式不正确"
+              ]
+            }
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "10001"
+          },
+          "email": {
+            "type": "string",
+            "description": "登录邮箱",
+            "example": "nickfurry@gmail.com",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号（E.164）",
+            "example": "+621234456744",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "description": "展示名称",
+            "example": "Nick J Furry"
+          },
+          "username": {
+            "type": "string",
+            "description": "唯一用户名",
+            "example": "nickfurrybosku"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像地址",
+            "example": "https://cdn.kaya.app/avatars/10001.png",
+            "format": "uri",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "description": "性别",
+            "example": "male",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ],
+            "nullable": true
+          },
+          "birthday": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD",
+            "example": "1945-08-17",
+            "nullable": true
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "邮箱是否已验证",
+            "example": true
+          },
+          "phoneVerified": {
+            "type": "boolean",
+            "description": "手机号是否已验证",
+            "example": false
+          },
+          "status": {
+            "type": "string",
+            "description": "账号状态",
+            "example": "active",
+            "enum": [
+              "active",
+              "disabled",
+              "locked"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "username",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AuthTokens": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "访问令牌 JWT",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "刷新令牌",
+            "example": "rt_01J9Z8K3W6Q4M2N7P5R8T1V0X3"
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "令牌类型",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "访问令牌有效期（秒）",
+            "example": 3600
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "tokenType",
+          "expiresIn",
+          "user"
+        ]
+      },
+      "UserSettings": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "description": "语言",
+            "example": "zh-CN"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "时区",
+            "example": "Asia/Shanghai"
+          },
+          "defaultCurrencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "pushEnabled": {
+            "type": "boolean",
+            "description": "推送通知开关",
+            "example": true
+          },
+          "emailEnabled": {
+            "type": "boolean",
+            "description": "邮件通知开关",
+            "example": true
+          },
+          "smsEnabled": {
+            "type": "boolean",
+            "description": "短信通知开关",
+            "example": true
+          },
+          "marketingEnabled": {
+            "type": "boolean",
+            "description": "营销通知开关",
+            "example": false
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "locale",
+          "timezone",
+          "defaultCurrencyCode",
+          "pushEnabled",
+          "emailEnabled",
+          "smsEnabled",
+          "marketingEnabled"
+        ]
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "3250.00"
+          },
+          "status": {
+            "type": "string",
+            "description": "钱包状态",
+            "example": "active",
+            "enum": [
+              "active",
+              "frozen",
+              "closed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "currencyCode",
+          "balance",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "WalletSummary": {
+        "type": "object",
+        "properties": {
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "3250.00"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "统计月份 YYYY-MM",
+            "example": "2026-11"
+          },
+          "income": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1150.00"
+          },
+          "spent": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "800.00"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "walletId",
+          "currencyCode",
+          "balance",
+          "month",
+          "income",
+          "spent"
+        ]
+      },
+      "WalletCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "21001"
+          },
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001",
+            "nullable": true
+          },
+          "cardType": {
+            "type": "string",
+            "description": "卡类型",
+            "example": "credit",
+            "enum": [
+              "debit",
+              "credit"
+            ]
+          },
+          "brand": {
+            "type": "string",
+            "description": "卡组织",
+            "example": "visa",
+            "enum": [
+              "visa",
+              "mastercard",
+              "unionpay"
+            ]
+          },
+          "last4": {
+            "type": "string",
+            "description": "卡号后四位",
+            "example": "7281",
+            "pattern": "^[0-9]{4}$"
+          },
+          "holderName": {
+            "type": "string",
+            "description": "持卡人姓名",
+            "example": "Mr Antono Hann"
+          },
+          "expiryMonth": {
+            "type": "integer",
+            "description": "有效期月份",
+            "example": 9,
+            "minimum": 1,
+            "maximum": 12
+          },
+          "expiryYear": {
+            "type": "integer",
+            "description": "有效期年份",
+            "example": 2028,
+            "minimum": 2000
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "4890.00"
+          },
+          "creditLimit": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "10000.00",
+            "nullable": true
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "是否主卡",
+            "example": false
+          },
+          "status": {
+            "type": "string",
+            "description": "卡状态",
+            "example": "active",
+            "enum": [
+              "active",
+              "expired",
+              "frozen",
+              "removed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "cardType",
+          "brand",
+          "last4",
+          "holderName",
+          "expiryMonth",
+          "expiryYear",
+          "currencyCode",
+          "balance",
+          "isPrimary",
+          "status"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "22001"
+          },
+          "code": {
+            "type": "string",
+            "description": "稳定业务编码",
+            "example": "travelling"
+          },
+          "type": {
+            "type": "string",
+            "description": "收支类型",
+            "example": "expense",
+            "enum": [
+              "income",
+              "expense"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "分类名称",
+            "example": "Travelling"
+          },
+          "icon": {
+            "type": "string",
+            "description": "图标标识",
+            "example": "ic-travelling",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "description": "主题色",
+            "example": "#8b5cf6",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "排序值",
+            "example": 30
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "type",
+          "name",
+          "sortOrder"
+        ]
+      },
+      "Counterparty": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "10002",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "description": "对方名称快照",
+            "example": "Prince T’Challa"
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "对方账号快照",
+            "example": "123456789012",
+            "nullable": true
+          },
+          "bankName": {
+            "type": "string",
+            "description": "银行名称",
+            "example": "Kaya Bank",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23001"
+          },
+          "referenceNo": {
+            "type": "string",
+            "description": "对外交易号",
+            "example": "ID-12345"
+          },
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "type": {
+            "type": "string",
+            "description": "交易类型",
+            "example": "transfer_out",
+            "enum": [
+              "income",
+              "expense",
+              "transfer_out",
+              "transfer_in",
+              "refund"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "description": "资金方向",
+            "example": "debit",
+            "enum": [
+              "credit",
+              "debit"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "交易状态",
+            "example": "success",
+            "enum": [
+              "pending",
+              "success",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          },
+          "feeAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "7.50"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "category": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Category"
+              }
+            ],
+            "nullable": true,
+            "description": "收入/支出分类；转账为空"
+          },
+          "counterparty": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Counterparty"
+              }
+            ],
+            "nullable": true,
+            "description": "对方信息快照"
+          },
+          "recipientId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "24001",
+            "nullable": true
+          },
+          "relatedTransactionId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23002",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "description": "备注",
+            "example": "Monthly student payment",
+            "nullable": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2018-09-20T10:30:24.000Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2018-09-20T10:30:24.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "referenceNo",
+          "walletId",
+          "type",
+          "direction",
+          "status",
+          "amount",
+          "feeAmount",
+          "currencyCode",
+          "occurredAt"
+        ]
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23001"
+          },
+          "referenceNo": {
+            "type": "string",
+            "description": "交易号",
+            "example": "ID-12345"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2018-09-20T10:30:24.000Z"
+          },
+          "transactionType": {
+            "type": "string",
+            "description": "交易类型",
+            "example": "transfer_out",
+            "enum": [
+              "income",
+              "expense",
+              "transfer_out",
+              "transfer_in",
+              "refund"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "交易状态",
+            "example": "success",
+            "enum": [
+              "pending",
+              "success",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          },
+          "feeAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "7.50"
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "157.50"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "recipient": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Counterparty"
+              }
+            ],
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "description": "备注",
+            "example": "Monthly student payment",
+            "nullable": true
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "transactionId",
+          "referenceNo",
+          "occurredAt",
+          "transactionType",
+          "status",
+          "amount",
+          "feeAmount",
+          "totalAmount",
+          "currencyCode"
+        ]
+      },
+      "Recipient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "24001"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "收款人姓名",
+            "example": "Prince T’Challa"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号",
+            "example": "+621234456744",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "tchalla@example.com",
+            "format": "email",
+            "nullable": true
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "收款账号",
+            "example": "123456789012",
+            "nullable": true
+          },
+          "bankName": {
+            "type": "string",
+            "description": "银行名称",
+            "example": "Kaya Bank",
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像地址",
+            "example": "https://cdn.kaya.app/avatars/24001.png",
+            "format": "uri",
+            "nullable": true
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "是否常用联系人",
+            "example": true
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "isFavorite",
+          "createdAt"
+        ]
+      },
+      "TransferQuote": {
+        "type": "object",
+        "properties": {
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          },
+          "feeRate": {
+            "type": "string",
+            "description": "手续费率",
+            "example": "0.05",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "feeAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "7.50"
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "157.50"
+          },
+          "availableBalance": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "3250.00"
+          },
+          "sufficientBalance": {
+            "type": "boolean",
+            "description": "余额是否充足",
+            "example": true
+          }
+        },
+        "required": [
+          "walletId",
+          "currencyCode",
+          "amount",
+          "feeRate",
+          "feeAmount",
+          "totalAmount",
+          "availableBalance",
+          "sufficientBalance"
+        ]
+      },
+      "Transfer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23001"
+          },
+          "referenceNo": {
+            "type": "string",
+            "description": "对外交易号",
+            "example": "ID-12345"
+          },
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "status": {
+            "type": "string",
+            "description": "交易状态",
+            "example": "success",
+            "enum": [
+              "pending",
+              "success",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          },
+          "feeAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "7.50"
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "157.50"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/Counterparty"
+          },
+          "note": {
+            "type": "string",
+            "description": "备注",
+            "example": "Monthly student payment",
+            "nullable": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2018-09-20T10:30:24.000Z"
+          },
+          "relatedTransactionId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23002",
+            "nullable": true
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/Receipt"
+          }
+        },
+        "required": [
+          "id",
+          "referenceNo",
+          "walletId",
+          "status",
+          "amount",
+          "feeAmount",
+          "totalAmount",
+          "currencyCode",
+          "recipient",
+          "occurredAt"
+        ]
+      },
+      "Budget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "25001"
+          },
+          "categoryId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "22001"
+          },
+          "categoryName": {
+            "type": "string",
+            "description": "分类名称",
+            "example": "Travelling"
+          },
+          "categoryIcon": {
+            "type": "string",
+            "description": "分类图标",
+            "example": "ic-travelling",
+            "nullable": true
+          },
+          "categoryColor": {
+            "type": "string",
+            "description": "分类颜色",
+            "example": "#8b5cf6",
+            "nullable": true
+          },
+          "periodType": {
+            "type": "string",
+            "description": "预算周期",
+            "example": "monthly",
+            "enum": [
+              "monthly",
+              "weekly",
+              "custom"
+            ]
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD",
+            "example": "2026-11-01"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD",
+            "example": "2026-11-30"
+          },
+          "amountLimit": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1363.64"
+          },
+          "spent": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1500.00"
+          },
+          "remaining": {
+            "type": "string",
+            "pattern": "^-?[0-9]+\\.[0-9]{2}$",
+            "description": "金额，可为负，两位小数字符串",
+            "example": "-136.36"
+          },
+          "usedPercent": {
+            "type": "number",
+            "description": "使用率（百分比）",
+            "example": 110,
+            "format": "double"
+          },
+          "status": {
+            "type": "string",
+            "description": "预算状态",
+            "example": "over_budget",
+            "enum": [
+              "under_control",
+              "reach_limit",
+              "over_budget"
+            ]
+          },
+          "alertThreshold": {
+            "type": "number",
+            "description": "提醒阈值（百分比）",
+            "example": 80,
+            "format": "double"
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "id",
+          "categoryId",
+          "categoryName",
+          "periodType",
+          "periodStart",
+          "periodEnd",
+          "amountLimit",
+          "spent",
+          "remaining",
+          "usedPercent",
+          "status",
+          "alertThreshold",
+          "currencyCode"
+        ]
+      },
+      "CategorySpend": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "22001"
+          },
+          "categoryName": {
+            "type": "string",
+            "description": "分类名称",
+            "example": "Travelling"
+          },
+          "categoryIcon": {
+            "type": "string",
+            "description": "分类图标",
+            "example": "ic-travelling",
+            "nullable": true
+          },
+          "categoryColor": {
+            "type": "string",
+            "description": "分类颜色",
+            "example": "#8b5cf6",
+            "nullable": true
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1500.00"
+          },
+          "percentage": {
+            "type": "number",
+            "description": "占总支出百分比",
+            "example": 24.19,
+            "format": "double"
+          },
+          "transactionCount": {
+            "type": "integer",
+            "description": "交易笔数",
+            "example": 12
+          }
+        },
+        "required": [
+          "categoryId",
+          "categoryName",
+          "amount",
+          "percentage",
+          "transactionCount"
+        ]
+      },
+      "TransactionSummary": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "统计月份 YYYY-MM",
+            "example": "2026-11"
+          },
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001",
+            "nullable": true
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "totalIncome": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1150.00"
+          },
+          "totalSpent": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "6200.00"
+          },
+          "net": {
+            "type": "string",
+            "pattern": "^-?[0-9]+\\.[0-9]{2}$",
+            "description": "金额，可为负，两位小数字符串",
+            "example": "-5050.00"
+          },
+          "byCategory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategorySpend"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "currencyCode",
+          "totalIncome",
+          "totalSpent",
+          "net",
+          "byCategory"
+        ]
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "26001"
+          },
+          "type": {
+            "type": "string",
+            "description": "通知类型",
+            "example": "transfer_received",
+            "enum": [
+              "transfer_received",
+              "budget_alert",
+              "payment_received",
+              "income",
+              "system"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "标题",
+            "example": "Scarlett sent money to you"
+          },
+          "body": {
+            "type": "string",
+            "description": "内容",
+            "example": "Scarlett sent money to you $125 for your monthly student payment"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "125.00",
+            "nullable": true
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$",
+            "nullable": true
+          },
+          "relatedTransactionId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "23001",
+            "nullable": true
+          },
+          "isRead": {
+            "type": "boolean",
+            "description": "是否已读",
+            "example": false
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T07:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "body",
+          "isRead",
+          "createdAt"
+        ]
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "27001"
+          },
+          "label": {
+            "type": "string",
+            "description": "地址标签",
+            "example": "Home",
+            "nullable": true
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "收件人",
+            "example": "Nick J Furry"
+          },
+          "phone": {
+            "type": "string",
+            "description": "联系电话",
+            "example": "+621234456744"
+          },
+          "countryCode": {
+            "type": "string",
+            "description": "国家代码 ISO 3166-1",
+            "example": "ID",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "province": {
+            "type": "string",
+            "description": "省/州",
+            "example": "DKI Jakarta",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "description": "城市",
+            "example": "Jakarta",
+            "nullable": true
+          },
+          "district": {
+            "type": "string",
+            "description": "区县",
+            "example": "Kebayoran",
+            "nullable": true
+          },
+          "detailAddress": {
+            "type": "string",
+            "description": "详细地址",
+            "example": "Jl. Example No. 10"
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "邮编",
+            "example": "12140",
+            "nullable": true
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "是否默认地址",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "recipientName",
+          "phone",
+          "countryCode",
+          "detailAddress",
+          "isDefault",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "28001"
+          },
+          "type": {
+            "type": "string",
+            "description": "认证类型",
+            "example": "identity",
+            "enum": [
+              "identity",
+              "address",
+              "phone",
+              "email"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "认证状态",
+            "example": "verified",
+            "enum": [
+              "pending",
+              "verified",
+              "rejected"
+            ]
+          },
+          "documentType": {
+            "type": "string",
+            "description": "证件类型",
+            "example": "ID_CARD",
+            "nullable": true
+          },
+          "documentNoLast4": {
+            "type": "string",
+            "description": "证件号后四位",
+            "example": "1234",
+            "pattern": "^[0-9]{4}$",
+            "nullable": true
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-12T08:00:00.000Z",
+            "nullable": true
+          },
+          "rejectedReason": {
+            "type": "string",
+            "description": "驳回原因",
+            "example": "证件照片不清晰",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2026-11-10T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "createdAt"
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "姓名",
+            "example": "Nick Furry",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "nickfurry@gmail.com",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "description": "密码，至少 8 位",
+            "example": "P@ssw0rd!",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 64
+          },
+          "username": {
+            "type": "string",
+            "description": "可选用户名；不传则由邮箱前缀生成",
+            "example": "nickfurry",
+            "minLength": 3,
+            "maxLength": 32,
+            "pattern": "^[a-zA-Z0-9_]+$"
+          }
+        },
+        "required": [
+          "displayName",
+          "email",
+          "password"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "Nickfurry@gmail.com",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码",
+            "example": "P@ssw0rd!",
+            "format": "password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "刷新令牌",
+            "example": "rt_01J9Z8K3W6Q4M2N7P5R8T1V0X3"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "注册邮箱",
+            "example": "Nickfurry@gmail.com",
+            "format": "email"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "邮件中的重置令牌",
+            "example": "prt_01J9Z8K3W6Q4M2N7P5R8T1V0X3"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "新密码，至少 8 位",
+            "example": "N3wP@ssw0rd!",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ]
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "姓名",
+            "example": "Nick J Furry",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "username": {
+            "type": "string",
+            "description": "唯一用户名",
+            "example": "nickfurrybosku",
+            "minLength": 3,
+            "maxLength": 32,
+            "pattern": "^[a-zA-Z0-9_]+$"
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号（E.164）",
+            "example": "+621234456744"
+          },
+          "gender": {
+            "type": "string",
+            "description": "性别",
+            "example": "male",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ]
+          },
+          "birthday": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD",
+            "example": "1945-08-17"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像地址",
+            "example": "https://cdn.kaya.app/avatars/10001.png",
+            "format": "uri"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "当前密码",
+            "example": "P@ssw0rd!",
+            "format": "password"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "新密码，至少 8 位",
+            "example": "N3wP@ssw0rd!",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "UpdateSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "description": "语言",
+            "example": "zh-CN"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "时区",
+            "example": "Asia/Shanghai"
+          },
+          "defaultCurrencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "pushEnabled": {
+            "type": "boolean",
+            "description": "推送通知开关",
+            "example": true
+          },
+          "emailEnabled": {
+            "type": "boolean",
+            "description": "邮件通知开关",
+            "example": true
+          },
+          "smsEnabled": {
+            "type": "boolean",
+            "description": "短信通知开关",
+            "example": true
+          },
+          "marketingEnabled": {
+            "type": "boolean",
+            "description": "营销通知开关",
+            "example": false
+          }
+        }
+      },
+      "CreateTransactionRequest": {
+        "type": "object",
+        "properties": {
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "type": {
+            "type": "string",
+            "description": "收入或支出",
+            "example": "expense",
+            "enum": [
+              "income",
+              "expense"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "25.00"
+          },
+          "categoryId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "22001"
+          },
+          "note": {
+            "type": "string",
+            "description": "备注",
+            "example": "Buy a Sate Klathak",
+            "maxLength": 255
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC 时间",
+            "example": "2018-09-18T10:30:24.000Z"
+          }
+        },
+        "required": [
+          "walletId",
+          "type",
+          "amount",
+          "categoryId"
+        ]
+      },
+      "TransferQuoteRequest": {
+        "type": "object",
+        "properties": {
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "recipientId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "24001"
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "收款账号；与 recipientId 二选一",
+            "example": "123456789012"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          }
+        },
+        "required": [
+          "walletId",
+          "amount"
+        ]
+      },
+      "TransferRecipientInput": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "收款人姓名",
+            "example": "Prince T’Challa"
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "收款账号",
+            "example": "123456789012"
+          },
+          "bankName": {
+            "type": "string",
+            "description": "银行名称",
+            "example": "Kaya Bank"
+          }
+        },
+        "required": [
+          "displayName",
+          "accountNo"
+        ]
+      },
+      "CreateTransferRequest": {
+        "type": "object",
+        "properties": {
+          "walletId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "20001"
+          },
+          "recipientId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "24001"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/TransferRecipientInput"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "150.00"
+          },
+          "note": {
+            "type": "string",
+            "description": "备注",
+            "example": "Monthly student payment",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "walletId",
+          "amount"
+        ]
+      },
+      "CreateRecipientRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "收款人姓名",
+            "example": "King M’baku",
+            "maxLength": 64
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号",
+            "example": "+621234456744"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "mbaku@example.com",
+            "format": "email"
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "收款账号",
+            "example": "123456789013",
+            "maxLength": 64
+          },
+          "bankName": {
+            "type": "string",
+            "description": "银行名称",
+            "example": "Kaya Bank",
+            "maxLength": 64
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像地址",
+            "example": "https://cdn.kaya.app/avatars/24002.png",
+            "format": "uri"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "是否常用",
+            "example": false
+          }
+        },
+        "required": [
+          "displayName"
+        ]
+      },
+      "UpdateRecipientRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "收款人姓名",
+            "example": "King M’baku",
+            "maxLength": 64
+          },
+          "phone": {
+            "type": "string",
+            "description": "手机号",
+            "example": "+621234456744"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱",
+            "example": "mbaku@example.com",
+            "format": "email"
+          },
+          "accountNo": {
+            "type": "string",
+            "description": "收款账号",
+            "example": "123456789013",
+            "maxLength": 64
+          },
+          "bankName": {
+            "type": "string",
+            "description": "银行名称",
+            "example": "Kaya Bank",
+            "maxLength": 64
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像地址",
+            "example": "https://cdn.kaya.app/avatars/24002.png",
+            "format": "uri"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "是否常用",
+            "example": true
+          }
+        }
+      },
+      "CreateBudgetRequest": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "ID，字符串传输避免 JS 精度丢失",
+            "example": "22001"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "统计月份 YYYY-MM",
+            "example": "2026-11"
+          },
+          "amountLimit": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1363.64"
+          },
+          "alertThreshold": {
+            "type": "number",
+            "description": "提醒阈值（百分比）",
+            "example": 80,
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "categoryId",
+          "month",
+          "amountLimit"
+        ]
+      },
+      "UpdateBudgetRequest": {
+        "type": "object",
+        "properties": {
+          "amountLimit": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{2}$",
+            "description": "金额，两位小数字符串，避免浮点误差",
+            "example": "1500.00"
+          },
+          "alertThreshold": {
+            "type": "number",
+            "description": "提醒阈值（百分比）",
+            "example": 85,
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "CreateCardRequest": {
+        "type": "object",
+        "properties": {
+          "cardType": {
+            "type": "string",
+            "description": "卡类型",
+            "example": "credit",
+            "enum": [
+              "debit",
+              "credit"
+            ]
+          },
+          "brand": {
+            "type": "string",
+            "description": "卡组织",
+            "example": "visa",
+            "enum": [
+              "visa",
+              "mastercard",
+              "unionpay"
+            ]
+          },
+          "last4": {
+            "type": "string",
+            "description": "卡号后四位",
+            "example": "7281",
+            "pattern": "^[0-9]{4}$"
+          },
+          "holderName": {
+            "type": "string",
+            "description": "持卡人姓名",
+            "example": "Mr Antono Hann",
+            "maxLength": 64
+          },
+          "expiryMonth": {
+            "type": "integer",
+            "description": "有效期月份",
+            "example": 9,
+            "minimum": 1,
+            "maximum": 12
+          },
+          "expiryYear": {
+            "type": "integer",
+            "description": "有效期年份",
+            "example": 2028,
+            "minimum": 2000
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "币种，ISO 4217",
+            "example": "USD",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "paymentToken": {
+            "type": "string",
+            "description": "支付网关 token；禁止传完整卡号/CVV",
+            "example": "tok_visa_123456"
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "是否主卡",
+            "example": false
+          }
+        },
+        "required": [
+          "cardType",
+          "brand",
+          "last4",
+          "holderName",
+          "expiryMonth",
+          "expiryYear",
+          "currencyCode"
+        ]
+      },
+      "CreateAddressRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "地址标签",
+            "example": "Home"
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "收件人",
+            "example": "Nick J Furry"
+          },
+          "phone": {
+            "type": "string",
+            "description": "联系电话",
+            "example": "+621234456744"
+          },
+          "countryCode": {
+            "type": "string",
+            "description": "国家代码 ISO 3166-1",
+            "example": "ID",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "province": {
+            "type": "string",
+            "description": "省/州",
+            "example": "DKI Jakarta"
+          },
+          "city": {
+            "type": "string",
+            "description": "城市",
+            "example": "Jakarta"
+          },
+          "district": {
+            "type": "string",
+            "description": "区县",
+            "example": "Kebayoran"
+          },
+          "detailAddress": {
+            "type": "string",
+            "description": "详细地址",
+            "example": "Jl. Example No. 10"
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "邮编",
+            "example": "12140"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "是否默认地址",
+            "example": false
+          }
+        },
+        "required": [
+          "recipientName",
+          "phone",
+          "countryCode",
+          "detailAddress"
+        ]
+      },
+      "UpdateAddressRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "地址标签",
+            "example": "Office"
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "收件人",
+            "example": "Nick J Furry"
+          },
+          "phone": {
+            "type": "string",
+            "description": "联系电话",
+            "example": "+621234456744"
+          },
+          "countryCode": {
+            "type": "string",
+            "description": "国家代码 ISO 3166-1",
+            "example": "ID",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "province": {
+            "type": "string",
+            "description": "省/州",
+            "example": "DKI Jakarta"
+          },
+          "city": {
+            "type": "string",
+            "description": "城市",
+            "example": "Jakarta"
+          },
+          "district": {
+            "type": "string",
+            "description": "区县",
+            "example": "Kebayoran"
+          },
+          "detailAddress": {
+            "type": "string",
+            "description": "详细地址",
+            "example": "Jl. Example No. 11"
+          },
+          "postalCode": {
+            "type": "string",
+            "description": "邮编",
+            "example": "12140"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "是否默认地址",
+            "example": true
+          }
+        }
+      },
+      "CreateVerificationRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "认证类型",
+            "example": "identity",
+            "enum": [
+              "identity",
+              "address",
+              "phone",
+              "email"
+            ]
+          },
+          "documentType": {
+            "type": "string",
+            "description": "证件类型",
+            "example": "ID_CARD"
+          },
+          "documentNo": {
+            "type": "string",
+            "description": "证件号；服务端加密存储，仅返回后四位",
+            "example": "3171234567891234"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "TransactionPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前页",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "description": "总条数",
+            "example": 120
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "总页数",
+            "example": 6
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
+        ]
+      },
+      "RecipientPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipient"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前页",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "description": "总条数",
+            "example": 120
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "总页数",
+            "example": 6
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
+        ]
+      },
+      "NotificationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前页",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "description": "总条数",
+            "example": 120
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "总页数",
+            "example": 6
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
+        ]
+      }
+    }
+  }
+}

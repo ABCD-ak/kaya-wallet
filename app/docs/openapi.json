@@ -3,15 +3,15 @@
   "info": {
     "title": "Kaya Wallet API",
     "version": "1.0.0",
-    "description": "Kaya 移动端钱包接口文档，依据即时设计 23 个画板与 `db/schema.sql` 设计。\n\n## 约定\n- Base URL：`https://api.kaya.app/api/v1`，本地 `http://localhost:3000/api/v1`\n- 除注册/登录/刷新/找回密码外，均需 `Authorization: Bearer <accessToken>`\n- 统一响应：`{ code, message, requestId, data }`；`code = 0` 表示成功\n- 金额与 ID 均用字符串传输：金额两位小数（如 `\"150.00\"`），ID 为数字字符串，避免 JS 精度丢失\n- 时间使用 ISO 8601 UTC，如 `2026-11-12T08:00:00.000Z`\n- 分页参数 `page` / `pageSize`，返回 `{ items, page, pageSize, total, totalPages }`\n- 所有资金变动接口必须带 `Idempotency-Key`，同键重放返回首次结果\n- 余额、月度收支、预算使用率、回执均为流水派生数据，不单独存储\n\n## 主要错误码\n| code | HTTP | 含义 |\n| --- | --- | --- |\n| 0 | 200/201 | 成功 |\n| 40001 | 400 | 参数错误 |\n| 40101 | 401 | 未登录或令牌失效 |\n| 40301 | 403 | 无权限 / 账号被锁定 |\n| 40401 | 404 | 资源不存在 |\n| 40901 | 409 | 唯一键冲突 |\n| 42201 | 422 | 业务校验失败（如余额不足） |\n| 42901 | 429 | 请求过于频繁 |\n| 50000 | 500 | 服务器内部错误 |\n\n## 与数据库的对应\n用户 `users` / `user_settings` / `user_addresses` / `user_verifications`，钱包 `wallets`，银行卡 `wallet_cards`，分类 `categories`，预算 `budgets`，联系人 `recipients`，流水 `transactions`，通知 `notifications`。`user_sessions` / `password_reset_tokens` 为服务端内部表，不直接暴露。"
+    "description": "Kaya 移动端钱包接口文档，依据即时设计 23 个画板与 `db/schema.sql` 设计。\n\n## 约定\n- Base URL：`/api`（与部署域名同源），本地 `http://localhost:8080/api`\n- 除注册/登录/刷新/找回密码外，均需 `Authorization: Bearer <accessToken>`\n- 统一响应：`{ code, message, requestId, data }`；`code = 0` 表示成功\n- 金额与 ID 均用字符串传输：金额两位小数（如 `\"150.00\"`），ID 为数字字符串，避免 JS 精度丢失\n- 时间使用 ISO 8601 UTC，如 `2026-11-12T08:00:00.000Z`\n- 分页参数 `page` / `pageSize`，返回 `{ items, page, pageSize, total, totalPages }`\n- 所有资金变动接口必须带 `Idempotency-Key`，同键重放返回首次结果\n- 余额、月度收支、预算使用率、回执均为流水派生数据，不单独存储\n\n## 主要错误码\n| code | HTTP | 含义 |\n| --- | --- | --- |\n| 0 | 200/201 | 成功 |\n| 40001 | 400 | 参数错误 |\n| 40101 | 401 | 未登录或令牌失效 |\n| 40301 | 403 | 无权限 / 账号被锁定 |\n| 40401 | 404 | 资源不存在 |\n| 40901 | 409 | 唯一键冲突 |\n| 42201 | 422 | 业务校验失败（如余额不足） |\n| 42901 | 429 | 请求过于频繁 |\n| 50000 | 500 | 服务器内部错误 |\n\n## 与数据库的对应\n用户 `users` / `user_settings` / `user_addresses` / `user_verifications`，钱包 `wallets`，银行卡 `wallet_cards`，分类 `categories`，预算 `budgets`，联系人 `recipients`，流水 `transactions`，通知 `notifications`。`user_sessions` / `password_reset_tokens` 为服务端内部表，不直接暴露。"
   },
   "servers": [
     {
-      "url": "https://api.kaya.app/api/v1",
-      "description": "生产环境（示例）"
+      "url": "/api",
+      "description": "当前部署（与页面同源）"
     },
     {
-      "url": "http://localhost:3000/api/v1",
+      "url": "http://localhost:8080/api",
       "description": "本地开发"
     }
   ],
