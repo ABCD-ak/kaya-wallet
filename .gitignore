@@ -1,0 +1,23 @@
+# ---------- 敏感信息（禁止入库） ----------
+登录信息.txt
+app/.env.production
+app/.env.*.local
+app/.claude/
+kaya-backend/src/main/resources/application.properties
+deploy/.env
+.env
+
+# ---------- 本地临时产物 ----------
+app/node_modules/
+app/dist/
+app/.tmp/
+kaya-backend/target/
+tmp-avatar/
+tmp-ai-test.mjs
+
+# ---------- 系统 / 编辑器 ----------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
