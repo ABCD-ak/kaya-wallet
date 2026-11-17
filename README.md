@@ -1,5 +1,7 @@
 # Kaya Wallet · 移动端钱包全栈项目
 
+[![CI](https://github.com/ABCD-ak/kaya-wallet/actions/workflows/ci.yml/badge.svg)](https://github.com/ABCD-ak/kaya-wallet/actions/workflows/ci.yml)
+
 一个按设计稿 1:1 还原的移动端数字钱包：Vue 3 前端 + 传统 Spring MVC 后端 + MySQL，覆盖注册登录、钱包余额、记账、转账、银行卡、预算、通知、回单下载与 AI 客服。
 
 > 前端不是逐页手写，而是有一套**设计稿 JSON 驱动的渲染引擎**；后端刻意不使用 Spring Boot，用传统 `web.xml` + Jetty/Tomcat WAR 的方式落地。
