@@ -1,0 +1,19 @@
+.git
+.gitignore
+.dockerignore
+
+# 本地依赖与构建产物
+app/node_modules
+app/dist
+app/.tmp
+kaya-backend/target
+
+# 敏感配置（镜像内使用 application.properties.example）
+app/.env.production
+app/.env.*.local
+kaya-backend/src/main/resources/application.properties
+deploy/.env
+.env
+登录信息.txt
+tmp-avatar
+tmp-ai-test.mjs
