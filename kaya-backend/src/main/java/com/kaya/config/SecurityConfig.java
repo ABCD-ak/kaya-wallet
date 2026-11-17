@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,10 +34,15 @@ public class SecurityConfig {
 
     private final JwtService jwtService;
     private final ObjectMapper objectMapper;
+    private final String allowedOrigins;
 
-    public SecurityConfig(JwtService jwtService, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtService jwtService,
+                          ObjectMapper objectMapper,
+                          @Value("${app.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*,https://*.vercel.app,https://*.pages.dev}")
+                          String allowedOrigins) {
         this.jwtService = jwtService;
         this.objectMapper = objectMapper;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -52,10 +58,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "https://*.traesite.cn"));
+        config.setAllowedOriginPatterns(java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("X-Request-Id"));

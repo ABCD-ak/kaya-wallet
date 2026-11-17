@@ -110,6 +110,7 @@ public class GlobalExceptionHandler {
             case 413 -> HttpStatus.PAYLOAD_TOO_LARGE;
             case 415 -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
             case 422 -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case 429 -> HttpStatus.TOO_MANY_REQUESTS;
             case 500 -> HttpStatus.INTERNAL_SERVER_ERROR;
             default -> HttpStatus.BAD_REQUEST;
         };

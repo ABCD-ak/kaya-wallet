@@ -16,6 +16,7 @@ import com.kaya.mapper.UserSettingsMapper;
 import com.kaya.mapper.WalletMapper;
 import com.kaya.security.AuthenticatedUser;
 import com.kaya.security.JwtService;
+import com.kaya.security.RateLimitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,7 @@ public class AuthService {
     private final UserSessionMapper userSessionMapper;
     private final PasswordResetTokenMapper passwordResetTokenMapper;
     private final EmailCodeService emailCodeService;
+    private final RateLimitService rateLimitService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final String dummyPasswordHash;
@@ -61,6 +63,7 @@ public class AuthService {
             UserSessionMapper userSessionMapper,
             PasswordResetTokenMapper passwordResetTokenMapper,
             EmailCodeService emailCodeService,
+            RateLimitService rateLimitService,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             @Value("${jwt.refresh-token-ttl-days:30}") int refreshTokenTtlDays,
@@ -72,6 +75,7 @@ public class AuthService {
         this.userSessionMapper = userSessionMapper;
         this.passwordResetTokenMapper = passwordResetTokenMapper;
         this.emailCodeService = emailCodeService;
+        this.rateLimitService = rateLimitService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
@@ -109,19 +113,23 @@ public class AuthService {
     @Transactional
     public AuthTokens login(LoginRequest request, String userAgent, String ipAddress) {
         String email = normalizeEmail(request.email());
+        rateLimitService.assertLoginAllowed(email, ipAddress);
         User user = userMapper.findByEmail(email);
         if (user == null) {
             // Keep the response time similar whether or not the email exists.
             passwordEncoder.matches(request.password(), dummyPasswordHash);
+            rateLimitService.recordLoginFailure(email, ipAddress);
             throw new BusinessException(40101, "邮箱或密码错误");
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            rateLimitService.recordLoginFailure(email, ipAddress);
             throw new BusinessException(40101, "邮箱或密码错误");
         }
         if (!"active".equals(user.getStatus())) {
             throw new BusinessException(40301, "账号已被禁用或锁定");
         }
 
+        rateLimitService.clearLoginFailures(email, ipAddress);
         LocalDateTime now = utcNow();
         userMapper.updateLastLoginAt(user.getId(), now);
         user.setLastLoginAt(now);
